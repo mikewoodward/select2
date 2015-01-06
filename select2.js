@@ -1,7 +1,7 @@
 /*
 Copyright 2012 Igor Vaynberg
 
-Version: @@ver@@ Timestamp: @@timestamp@@
+Version: 3.5.2 Timestamp: Sat Nov  1 14:43:36 EDT 2014
 
 This software is licensed under the Apache License, Version 2.0 (the "Apache License") or the GNU
 General Public License version 2 (the "GPL License"). You may choose either license to govern your
@@ -18,7 +18,29 @@ Apache License or the GPL License is distributed on an "AS IS" BASIS, WITHOUT WA
 CONDITIONS OF ANY KIND, either express or implied. See the Apache License and the GPL License for
 the specific language governing permissions and limitations under the Apache License and the GPL License.
 */
-(function ($) {
+"use strict";
+/*global document, window, jQuery, console */
+(function (factory) {
+
+    if (typeof define === 'function' && define.amd) {
+        define(['jquery', 'exports'], factory);
+    }
+    else {
+        if (typeof window.jQuery === 'undefined') {
+            throw new ReferenceError('Cannot find jQuery; Select2 requires jQuery.');
+        }
+        if (typeof window.Select2 === 'undefined') {
+            window.Select2 = {};
+        }
+        else {
+            // If window.Select2 is already defined, then short circuit the function call.
+            return;
+        }
+        factory(window.jQuery, window.Select2);
+    }
+
+})(function ($, Select2) {
+
     if(typeof $.fn.each2 == "undefined") {
         $.extend($.fn, {
             /*
@@ -36,11 +58,6 @@ the specific language governing permissions and limitations under the Apache Lic
             }
         });
     }
-})(jQuery);
-
-(function ($, undefined) {
-    "use strict";
-    /*global document, window, jQuery, console */
 
     if (window.Select2 !== undefined) {
         return;
@@ -814,7 +831,7 @@ the specific language governing permissions and limitations under the Apache Lic
             // focusin can cause focus wars between modals and select2 since the dropdown is outside the modal.
             this.dropdown.on("click mouseup mousedown touchstart touchend focusin", function (e) { e.stopPropagation(); });
 
-            this.lastSearchTerm = undefined;
+            this.nextSearchTerm = undefined;
 
             if ($.isFunction(this.opts.initSelection)) {
                 // initialize selection based on the current value of the source element
@@ -870,21 +887,17 @@ the specific language governing permissions and limitations under the Apache Lic
                 select2.container.remove();
                 select2.liveRegion.remove();
                 select2.dropdown.remove();
-                element.removeData("select2")
-                    .off("select2");
-                if (!element.is("input[type='hidden']")) {
-                    element
-                        .show()
-                        .prop("autofocus", this.autofocus || false);
-                    if (this.elementTabIndex) {
-                        element.attr({tabindex: this.elementTabIndex});
-                    } else {
-                        element.removeAttr("tabindex");
-                    }
-                    element.show();
+                element
+                    .show()
+                    .removeData("select2")
+                    .off(".select2")
+                    .prop("autofocus", this.autofocus || false);
+                if (this.elementTabIndex) {
+                    element.attr({tabindex: this.elementTabIndex});
                 } else {
-                    element.css("display", "");
+                    element.removeAttr("tabindex");
                 }
+                element.show();
             }
 
             cleanupJQueryElements.call(this,
@@ -1329,11 +1342,10 @@ the specific language governing permissions and limitations under the Apache Lic
             };
 
             if (above) {
-                this.container.addClass("select2-drop-above");
-                $dropdown.addClass("select2-drop-above");
-                dropHeight = $dropdown.outerHeight(false);
                 css.top = offset.top - dropHeight;
                 css.bottom = 'auto';
+                this.container.addClass("select2-drop-above");
+                $dropdown.addClass("select2-drop-above");
             }
             else {
                 css.top = dropTop;
@@ -1486,9 +1498,6 @@ the specific language governing permissions and limitations under the Apache Lic
 
             this.clearSearch();
             this.search.removeClass("select2-active");
-
-            // Remove the aria active descendant for highlighted element
-            this.search.removeAttr("aria-activedescendant");
             this.opts.element.trigger($.Event("select2-close"));
         },
 
@@ -1505,27 +1514,6 @@ the specific language governing permissions and limitations under the Apache Lic
         // abstract
         clearSearch: function () {
 
-        },
-
-        /**
-         * @return {Boolean} Whether or not search value was changed.
-         * @private
-         */
-        prefillNextSearchTerm: function () {
-            // initializes search's value with nextSearchTerm (if defined by user)
-            // ignore nextSearchTerm if the dropdown is opened by the user pressing a letter
-            if(this.search.val() !== "") {
-                return false;
-            }
-
-            var nextSearchTerm = this.opts.nextSearchTerm(this.data(), this.lastSearchTerm);
-            if(nextSearchTerm !== undefined){
-                this.search.val(nextSearchTerm);
-                this.search.select();
-                return true;
-            }
-
-            return false;
         },
 
         //abstract
@@ -1841,7 +1829,6 @@ the specific language governing permissions and limitations under the Apache Lic
 
                 if (data.results.length === 0 && checkFormatter(opts.formatNoMatches, "formatNoMatches")) {
                     render("<li class='select2-no-results'>" + evaluate(opts.formatNoMatches, opts.element, search.val()) + "</li>");
-                    this.showSearch(search.val());
                     return;
                 }
 
@@ -1946,7 +1933,7 @@ the specific language governing permissions and limitations under the Apache Lic
                 } else if (this.opts.width === "copy" || this.opts.width === "resolve") {
                     // check if there is inline style on the element that contains width
                     style = this.opts.element.attr('style');
-                    if (typeof(style) === "string") {
+                    if (style !== undefined) {
                         attrs = style.split(';');
                         for (i = 0, l = attrs.length; i < l; i = i + 1) {
                             attr = attrs[i].replace(/\s/g, '');
@@ -2045,7 +2032,14 @@ the specific language governing permissions and limitations under the Apache Lic
                 }
             }
 
-            this.prefillNextSearchTerm();
+            // initializes search's value with nextSearchTerm (if defined by user)
+            // ignore nextSearchTerm if the dropdown is opened by the user pressing a letter
+            if(this.search.val() === "") {
+                if(this.nextSearchTerm != undefined){
+                    this.search.val(this.nextSearchTerm);
+                    this.search.select();
+                }
+            }
 
             this.focusser.prop("disabled", true).val("");
             this.updateResults(true);
@@ -2340,7 +2334,7 @@ the specific language governing permissions and limitations under the Apache Lic
                         self.updateSelection(selected);
                         self.close();
                         self.setPlaceholder();
-                        self.lastSearchTerm = self.search.val();
+                        self.nextSearchTerm = self.opts.nextSearchTerm(selected, self.search.val());
                     }
                 });
             }
@@ -2477,7 +2471,7 @@ the specific language governing permissions and limitations under the Apache Lic
 
             this.opts.element.trigger({ type: "select2-selected", val: this.id(data), choice: data });
 
-            this.lastSearchTerm = this.search.val();
+            this.nextSearchTerm = this.opts.nextSearchTerm(data, this.search.val());
             this.close();
 
             if ((!options || !options.noFocus) && this.opts.shouldFocusInput(this)) {
@@ -2945,9 +2939,16 @@ the specific language governing permissions and limitations under the Apache Lic
 
             this.focusSearch();
 
-            this.prefillNextSearchTerm();
-            this.updateResults(true);
+            // initializes search's value with nextSearchTerm (if defined by user)
+            // ignore nextSearchTerm if the dropdown is opened by the user pressing a letter
+            if(this.search.val() === "") {
+                if(this.nextSearchTerm != undefined){
+                    this.search.val(this.nextSearchTerm);
+                    this.search.select();
+                }
+            }
 
+            this.updateResults(true);
             if (this.opts.shouldFocusInput(this)) {
                 this.search.focus();
             }
@@ -2973,18 +2974,21 @@ the specific language governing permissions and limitations under the Apache Lic
 
         // multi
         updateSelection: function (data) {
-            var ids = {}, filtered = [], self = this;
+            var ids = [], filtered = [], self = this;
 
             // filter out duplicates
             $(data).each(function () {
-                if (!(self.id(this) in ids)) {
-                    ids[self.id(this)] = 0;
+                if (indexOf(self.id(this), ids) < 0) {
+                    ids.push(self.id(this));
                     filtered.push(this);
                 }
             });
+            data = filtered;
 
             this.selection.find(".select2-search-choice").remove();
-            this.addSelectedChoice(filtered);
+            $(data).each(function () {
+                self.addSelectedChoice(this);
+            });
             self.postprocessResults();
         },
 
@@ -3011,7 +3015,7 @@ the specific language governing permissions and limitations under the Apache Lic
             this.opts.element.trigger({ type: "selected", val: this.id(data), choice: data });
 
             // keep track of the search's value before it gets cleared
-            this.lastSearchTerm = this.search.val();
+            this.nextSearchTerm = this.opts.nextSearchTerm(data, this.search.val());
 
             this.clearSearch();
             this.updateResults();
@@ -3031,8 +3035,10 @@ the specific language governing permissions and limitations under the Apache Lic
                         this.updateResults(true);
                     } else {
                         // initializes search's value with nextSearchTerm and update search result
-                        if (this.prefillNextSearchTerm()) {
+                        if(this.nextSearchTerm != undefined){
+                            this.search.val(this.nextSearchTerm);
                             this.updateResults();
+                            this.search.select();
                         }
                     }
                     this.positionDropdown();
@@ -3058,14 +3064,6 @@ the specific language governing permissions and limitations under the Apache Lic
         },
 
         addSelectedChoice: function (data) {
-            var val = this.getVal(), self = this;
-            $(data).each(function () {
-                val.push(self.createChoice(this));
-            });
-            this.setVal(val);
-        },
-        
-        createChoice: function (data) {
             var enableChoice = !data.locked,
                 enabledItem = $(
                     "<li class='select2-search-choice'>" +
@@ -3078,6 +3076,7 @@ the specific language governing permissions and limitations under the Apache Lic
                     "</li>");
             var choice = enableChoice ? enabledItem : disabledItem,
                 id = this.id(data),
+                val = this.getVal(),
                 formatted,
                 cssClass;
 
@@ -3111,7 +3110,8 @@ the specific language governing permissions and limitations under the Apache Lic
             choice.data("select2-data", data);
             choice.insertBefore(this.searchContainer);
 
-            return id;
+            val.push(id);
+            this.setVal(val);
         },
 
         // multi
@@ -3243,16 +3243,14 @@ the specific language governing permissions and limitations under the Apache Lic
 
         // multi
         setVal: function (val) {
+            var unique;
             if (this.select) {
                 this.select.val(val);
             } else {
-                var unique = [], valMap = {};
+                unique = [];
                 // filter out duplicates
                 $(val).each(function () {
-                    if (!(this in valMap)) {
-                        unique.push(this);
-                        valMap[this] = 0;
-                    }
+                    if (indexOf(this, unique) < 0) unique.push(this);
                 });
                 this.opts.element.val(unique.length === 0 ? "" : unique.join(this.opts.separator));
             }
@@ -3268,9 +3266,11 @@ the specific language governing permissions and limitations under the Apache Lic
                 for (var j = 0; j < old.length; j++) {
                     if (equal(this.opts.id(current[i]), this.opts.id(old[j]))) {
                         current.splice(i, 1);
-                        i--;
+                        if(i>0){
+                            i--;
+                        }
                         old.splice(j, 1);
-                        break;
+                        j--;
                     }
                 }
             }
@@ -3555,4 +3555,4 @@ the specific language governing permissions and limitations under the Apache Lic
         }
     };
 
-}(jQuery));
+});
